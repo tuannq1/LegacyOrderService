@@ -1,28 +1,45 @@
-﻿// Data/ProductRepository.cs
-using System;
-using System.Collections.Generic;
-using System.Threading;
+// Data/ProductRepository.cs
+using Microsoft.EntityFrameworkCore;
 
 namespace LegacyOrderService.Data
 {
-    public class ProductRepository
+    public class ProductRepository : IProductRepository
     {
-        private readonly Dictionary<string, double> _productPrices = new()
+        private readonly OrderContext _context;
+
+        public ProductRepository(OrderContext context)
         {
-            ["Widget"] = 12.99,
-            ["Gadget"] = 15.49,
-            ["Doohickey"] = 8.75
-        };
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+        }
 
-        public double GetPrice(string productName)
+        public async Task<double> GetPriceAsync(string productName, CancellationToken cancellationToken = default)
         {
-            // Simulate an expensive lookup
-            Thread.Sleep(500);
+            if (string.IsNullOrWhiteSpace(productName))
+                throw new ArgumentException("productName required", nameof(productName));
 
-            if (_productPrices.TryGetValue(productName, out var price))
-                return price;
+            var product = await _context.Products
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Name == productName, cancellationToken);
 
-            throw new Exception("Product not found");
+            if (product == null)
+                throw new InvalidOperationException("Product not found");
+
+            return product.Price;
+        }
+
+        public async Task<(int ProductId, double Price)> GetProductByNameAsync(string productName, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(productName))
+                throw new ArgumentException("productName required", nameof(productName));
+
+            var product = await _context.Products
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Name == productName, cancellationToken);
+
+            if (product == null)
+                throw new InvalidOperationException("Product not found");
+
+            return (product.Id, product.Price);
         }
     }
 }

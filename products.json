@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "name": "Widget",
+    "price": 12.99
+  },
+  {
+    "id": 2,
+    "name": "Gadget",
+    "price": 15.49
+  },
+  {
+    "id": 3,
+    "name": "Doohickey",
+    "price": 8.75
+  }
+]

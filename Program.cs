@@ -1,46 +1,71 @@
 using System;
-using LegacyOrderService.Models;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using LegacyOrderService.Data;
+using LegacyOrderService.Services;
+using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 
 namespace LegacyOrderService
 {
     class Program
     {
-        static void Main(string[] args)
+        public static async Task<int> Main(string[] args)
         {
+            using IHost host = Host.CreateDefaultBuilder(args)
+                .ConfigureServices((context, services) =>
+                {
+                    // Prefer configuration, fall back to default file-based DB
+                    string conn = context.Configuration["ConnectionStrings:Default"] ?? "Data Source=orders.db";
+                    const string dsPrefix = "Data Source=";
+                    if (conn.StartsWith(dsPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var ds = conn.Substring(dsPrefix.Length).Trim();
+                        if (!Path.IsPathRooted(ds))
+                            ds = Path.Combine(AppContext.BaseDirectory, ds);
+                        conn = $"{dsPrefix}{ds}";
+                    }
+
+                    services.AddDbContext<OrderContext>(opt => opt.UseSqlite(conn));
+
+                    services.AddScoped<IProductRepository, ProductRepository>();
+                    services.AddScoped<IOrderRepository, OrderRepository>();
+                    services.AddScoped<IOrderProcessor, OrderProcessor>();
+                    services.AddScoped<IDataSeeder, DataSeeder>();
+                    services.AddScoped<App>();
+                })
+                .ConfigureLogging(logging => logging.ClearProviders().AddConsole())
+                .Build();
+
             Console.WriteLine("Welcome to Order Processor!");
-            Console.WriteLine("Enter customer name:");
-            string name = Console.ReadLine();
 
-            Console.WriteLine("Enter product name:");
-            string product = Console.ReadLine();
-            var productRepo = new ProductRepository();
-            double price = productRepo.GetPrice(product);
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (s, e) =>
+            {
+                e.Cancel = true;
+                Console.WriteLine("Cancellation requested...");
+                cts.Cancel();
+            };
 
+            await host.StartAsync(cts.Token);
 
-            Console.WriteLine("Enter quantity:");
-            int qty = Convert.ToInt32(Console.ReadLine());
+            using (var scope = host.Services.CreateScope())
+            {
+                var ctx = scope.ServiceProvider.GetRequiredService<OrderContext>();
+                await ctx.Database.MigrateAsync(cts.Token);
 
-            Console.WriteLine("Processing order...");
+                var seeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
+                await seeder.SeedProductsAsync(ctx, cts.Token);
+            }
 
-            Order order = new Order();
-            order.CustomerName = name;
-            order.ProductName = product;
-            order.Quantity = qty;
-            order.Price = 10.0;
+            var app = host.Services.GetRequiredService<App>();
+            int result = await app.RunAsync(cts.Token);
 
-            double total = order.Quantity * order.Price;
-
-            Console.WriteLine("Order complete!");
-            Console.WriteLine("Customer: " + order.CustomerName);
-            Console.WriteLine("Product: " + order.ProductName);
-            Console.WriteLine("Quantity: " + order.Quantity);
-            Console.WriteLine("Total: $" + price);
-
-            Console.WriteLine("Saving order to database...");
-            var repo = new OrderRepository();
-            repo.Save(order);
-            Console.WriteLine("Done.");
+            await host.StopAsync(cts.Token);
+            return result;
         }
     }
 }
