@@ -1,0 +1,48 @@
+# Build results
+bin/
+obj/
+
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+.vscode/**/*
+
+# Rider
+.idea/
+.idea/**/*
+*.sln.iml
+
+# Build folders
+Debug/
+Release/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Local user-specific files
+*.local.json
+appsettings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Node modules (if applicable)
+node_modules/
+
+# Environment files
+.env
+.env.local
